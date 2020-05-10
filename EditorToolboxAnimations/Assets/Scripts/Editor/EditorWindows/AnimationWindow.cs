@@ -3,7 +3,6 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Linq;
-using System;
 using UnityEditor.SceneManagement;
 using UnityEditor.Animations;
 
@@ -30,6 +29,8 @@ public class AnimationWindow : EditorWindow
 
     private float repetitionsDelay = 0f;
     private float repetitionsDelayCurrentOverhead = 0f;
+
+    private GUIStyle textStyle;
 
     [MenuItem("Toolbox/Animations")] // Appears at the top under toolbox
     static void InitWindow()
@@ -91,14 +92,14 @@ public class AnimationWindow : EditorWindow
 
         if (!animators.SequenceEqual(newAnimators))
         {
-            Debug.Log("Hierarchy update : Animators changed");
+            //Debug.Log("Hierarchy update : Animators changed");
 
             animators = newAnimators;
         }
 
         if (!animators.Contains(selectedAnimator))
         {
-            Debug.Log("Hierarchy update : Currently selected animator lost");
+            //Debug.Log("Hierarchy update : Currently selected animator lost");
 
             StopAnim();
 
@@ -107,7 +108,7 @@ public class AnimationWindow : EditorWindow
         }
         else if (!animations.Contains(selectedAnimation))
         {
-            Debug.Log("Hierarchy update : Currently selected animation lost");
+            //Debug.Log("Hierarchy update : Currently selected animation lost");
 
             StopAnim();
 
@@ -145,6 +146,15 @@ public class AnimationWindow : EditorWindow
             return;
         }
 
+        // Text style for later
+        if (textStyle == null)
+        {
+            textStyle = new GUIStyle();
+
+            textStyle.fontSize = 20;
+            textStyle.normal.textColor = Color.red;
+        }
+
         // Forced to do this because
         // When an animator that is selected is deleted
         // OnGUI happens before OnHierarchyChange
@@ -179,6 +189,11 @@ public class AnimationWindow : EditorWindow
             animations = FindAnimationClipsInAnimator(selectedAnimator);
 
             selectedAnimation = null;
+
+            // Select and light up selected animator
+            Selection.activeGameObject = selectedAnimator.gameObject;
+            SceneView.lastActiveSceneView.FrameSelected();
+            EditorGUIUtility.PingObject(selectedAnimator.gameObject);
         }
 
         if (animations.Count == 0)
@@ -278,11 +293,15 @@ public class AnimationWindow : EditorWindow
                     }
                 }
             }
+        }
 
-            if (repetitionsDelayCurrentOverhead > 0f)
-            {
-                GUILayout.Label("Repetition delay remaining : " + (repetitionsDelay - repetitionsDelayCurrentOverhead));
-            }
+        GUILayout.Label("Current time : " + animationTime, textStyle);
+        GUILayout.Label("Total time : " + selectedAnimation.length, textStyle);
+
+        if (!isSamplingViaSlider && repetitionsDelayCurrentOverhead > 0f)
+        {
+            float repetitionDelayRemaining = repetitionsDelay - repetitionsDelayCurrentOverhead;
+            GUILayout.Label("Repetition delay remaining : " + repetitionDelayRemaining, textStyle);
         }
     }
 
@@ -327,6 +346,7 @@ public class AnimationWindow : EditorWindow
         if (isPaused)
         {
             animationLastTickTime = Time.realtimeSinceStartup;
+            repetitionsDelayCurrentOverhead = 0f;
 
             return;
         }
