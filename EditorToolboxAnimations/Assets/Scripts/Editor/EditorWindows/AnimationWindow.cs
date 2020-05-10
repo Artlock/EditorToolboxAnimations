@@ -23,11 +23,13 @@ public class AnimationWindow : EditorWindow
     private float animationLastTickTime;
     private float animationTime;
 
-
     private bool isSamplingViaSlider = false;
     private float animationSamplingTime;
 
     private bool isPaused = false;
+
+    private float repetitionsDelay = 0f;
+    private float repetitionsDelayCurrentOverhead = 0f;
 
     [MenuItem("Toolbox/Animations")] // Appears at the top under toolbox
     static void InitWindow()
@@ -200,8 +202,6 @@ public class AnimationWindow : EditorWindow
 
         selectedAnimation = animations[selectedAnimationClipIndex];
 
-        animationSpeed = EditorGUILayout.Slider("Animation Speed", animationSpeed, 0.1f, 4f);
-
         if (isSamplingViaSlider)
         {
             if (GUILayout.Button("Swap to play mode"))
@@ -231,11 +231,16 @@ public class AnimationWindow : EditorWindow
                 animationSamplingTime = animationTime;
                 animationTime = 0f;
 
+                repetitionsDelayCurrentOverhead = 0f;
+
                 isPaused = false;
                 isSamplingViaSlider = true;
 
                 return;
             }
+
+            animationSpeed = EditorGUILayout.Slider("Animation Speed", animationSpeed, 0.1f, 4f);
+            repetitionsDelay = EditorGUILayout.Slider("Repetitions Delay", repetitionsDelay, 0f, 1f);
 
             if (isPaused)
             {
@@ -273,6 +278,11 @@ public class AnimationWindow : EditorWindow
                     }
                 }
             }
+
+            if (repetitionsDelayCurrentOverhead > 0f)
+            {
+                GUILayout.Label("Repetition delay remaining : " + (repetitionsDelay - repetitionsDelayCurrentOverhead));
+            }
         }
     }
 
@@ -298,6 +308,7 @@ public class AnimationWindow : EditorWindow
 
         animationTime = 0f;
         animationSamplingTime = 0f;
+        repetitionsDelayCurrentOverhead = 0f;
 
         isPaused = false;
         isPlaying = false;
@@ -324,7 +335,9 @@ public class AnimationWindow : EditorWindow
         {
             float timeSinceLastTick = Time.realtimeSinceStartup - animationLastTickTime;
 
-            animationTime = (animationTime + (timeSinceLastTick * animationSpeed)) % selectedAnimation.length; // Looping the animation
+            animationTime = (animationTime + repetitionsDelayCurrentOverhead + (timeSinceLastTick * animationSpeed)) % (selectedAnimation.length + repetitionsDelay); // Looping the animation
+            repetitionsDelayCurrentOverhead = Mathf.Max(0f, animationTime - selectedAnimation.length);
+            animationTime -= repetitionsDelayCurrentOverhead;
 
             AnimationMode.SampleAnimationClip(selectedAnimator.gameObject, selectedAnimation, animationTime);
         }
