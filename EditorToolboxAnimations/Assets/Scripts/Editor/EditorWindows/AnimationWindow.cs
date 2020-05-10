@@ -18,7 +18,16 @@ public class AnimationWindow : EditorWindow
     private AnimationClip selectedAnimation = null;
 
     private bool isPlaying = false;
-    private float editorLastTime;
+    private float animationSpeed = 1f;
+    private float animationStartTime;
+    private float animationLastTickTime;
+    private float animationTime;
+
+
+    private bool isSamplingViaSlider = false;
+    private float animationSamplingTime;
+
+    private bool isPaused = false;
 
     [MenuItem("Toolbox/Animations")] // Appears at the top under toolbox
     static void InitWindow()
@@ -152,11 +161,11 @@ public class AnimationWindow : EditorWindow
 
         if (selectedAnimator != null)
         {
-            selectedAnimatorIndex = EditorGUILayout.Popup(guiAnimators.IndexOf(selectedAnimator), guiAnimators.Select(x => x.gameObject.name + " - " + x.runtimeAnimatorController.name).ToArray());
+            selectedAnimatorIndex = EditorGUILayout.Popup("Animator", guiAnimators.IndexOf(selectedAnimator), guiAnimators.Select(x => x.gameObject.name + " - " + x.runtimeAnimatorController.name).ToArray());
         }
         else
         {
-            selectedAnimatorIndex = EditorGUILayout.Popup(0, guiAnimators.Select(x => x.gameObject.name + " - " + x.runtimeAnimatorController.name).ToArray());
+            selectedAnimatorIndex = EditorGUILayout.Popup("Animator", 0, guiAnimators.Select(x => x.gameObject.name + " - " + x.runtimeAnimatorController.name).ToArray());
         }
 
         selectedAnimator = guiAnimators[selectedAnimatorIndex];
@@ -182,29 +191,87 @@ public class AnimationWindow : EditorWindow
 
         if (selectedAnimation != null)
         {
-            selectedAnimationClipIndex = EditorGUILayout.Popup(animations.IndexOf(selectedAnimation), animations.Select(x => x.name).ToArray());
+            selectedAnimationClipIndex = EditorGUILayout.Popup("Animation", animations.IndexOf(selectedAnimation), animations.Select(x => x.name).ToArray());
         }
         else
         {
-            selectedAnimationClipIndex = EditorGUILayout.Popup(0, animations.Select(x => x.name).ToArray());
+            selectedAnimationClipIndex = EditorGUILayout.Popup("Animation", 0, animations.Select(x => x.name).ToArray());
         }
 
         selectedAnimation = animations[selectedAnimationClipIndex];
 
-        if (isPlaying)
+        animationSpeed = EditorGUILayout.Slider("Animation Speed", animationSpeed, 0.1f, 4f);
+
+        if (isSamplingViaSlider)
         {
-            if (GUILayout.Button("Stop"))
+            if (GUILayout.Button("Swap to play mode"))
             {
-                StopAnim();
-                isPlaying = false;
+                animationTime = animationSamplingTime;
+                animationSamplingTime = 0f;
+
+                isPaused = true;
+
+                isSamplingViaSlider = false;
+
+                return;
+            }
+
+            animationSamplingTime = EditorGUILayout.Slider("Sampling", animationSamplingTime, 0f, selectedAnimation.length);
+
+            if (!isPlaying)
+            {
+                PlayAnim();
+                isPlaying = true;
             }
         }
         else
         {
-            if (GUILayout.Button("Play"))
+            if (GUILayout.Button("Swap to sample mode"))
             {
-                PlayAnim();
-                isPlaying = true;
+                animationSamplingTime = animationTime;
+                animationTime = 0f;
+
+                isPaused = false;
+                isSamplingViaSlider = true;
+
+                return;
+            }
+
+            if (isPaused)
+            {
+                if (GUILayout.Button("Unpause"))
+                {
+                    isPaused = false;
+                }
+                else if (GUILayout.Button("Stop"))
+                {
+                    StopAnim();
+                    isPaused = false;
+                    isPlaying = false;
+                }
+            }
+            else
+            {
+                if (isPlaying)
+                {
+                    if (GUILayout.Button("Pause"))
+                    {
+                        isPaused = true;
+                    }
+                    else if (GUILayout.Button("Stop"))
+                    {
+                        StopAnim();
+                        isPlaying = false;
+                    }
+                }
+                else
+                {
+                    if (GUILayout.Button("Play"))
+                    {
+                        PlayAnim();
+                        isPlaying = true;
+                    }
+                }
             }
         }
     }
@@ -213,7 +280,8 @@ public class AnimationWindow : EditorWindow
     {
         if (isPlaying) return;
 
-        editorLastTime = Time.realtimeSinceStartup;
+        animationStartTime = Time.realtimeSinceStartup;
+        animationLastTickTime = animationStartTime;
 
         EditorApplication.update += EditorApplication_update;
         AnimationMode.StartAnimationMode();
@@ -228,6 +296,10 @@ public class AnimationWindow : EditorWindow
         EditorApplication.update -= EditorApplication_update;
         AnimationMode.StopAnimationMode();
 
+        animationTime = 0f;
+        animationSamplingTime = 0f;
+
+        isPaused = false;
         isPlaying = false;
     }
 
@@ -241,10 +313,27 @@ public class AnimationWindow : EditorWindow
             return;
         }
 
-        float animationTime = Time.realtimeSinceStartup - editorLastTime;
-        animationTime %= selectedAnimation.length; // Looping the animation
+        if (isPaused)
+        {
+            animationLastTickTime = Time.realtimeSinceStartup;
 
-        AnimationMode.SampleAnimationClip(selectedAnimator.gameObject, selectedAnimation, animationTime);
+            return;
+        }
+
+        if (!isSamplingViaSlider)
+        {
+            float timeSinceLastTick = Time.realtimeSinceStartup - animationLastTickTime;
+
+            animationTime = (animationTime + (timeSinceLastTick * animationSpeed)) % selectedAnimation.length; // Looping the animation
+
+            AnimationMode.SampleAnimationClip(selectedAnimator.gameObject, selectedAnimation, animationTime);
+        }
+        else
+        {
+            AnimationMode.SampleAnimationClip(selectedAnimator.gameObject, selectedAnimation, animationSamplingTime % selectedAnimation.length);
+        }
+
+        animationLastTickTime = Time.realtimeSinceStartup;
     }
 
     private void EditorApplication_playModeStateChanged(PlayModeStateChange obj)
